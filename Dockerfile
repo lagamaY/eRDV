@@ -1,43 +1,36 @@
+# Utilisation d'une image de base avec PHP et Apache
+# FROM php:7.4-apache
+FROM php:8.0-apache
+# Installation des dépendances nécessaires pour Laravel
+RUN apt-get update && apt-get install -y \
+    libzip-dev \
+    zip \
+    unzip \
+    && docker-php-ext-install zip pdo pdo_mysql \
+    && a2enmod rewrite
 
-FROM php:8.0.8-fpm-alpine
-
-# Copy File Config
-# ADD C:\xampp\php /usr/local/etc/php-fpm.d/www.conf
-ADD C:\xampp\php\php.ini /usr/local/etc/php-fpm.d/
-
-# ADD and set Group
-RUN addgroup -g 1000 laravel && adduser -G laravel -g laravel -s /bin/sh -D laravel
-
-# Create folder to run
-RUN mkdir -p /var/www/html
-
-# Set Profile
-RUN chown laravel:laravel /var/www/html
-
-# Work in the specific space
+# Définition du répertoire de travail
 WORKDIR /var/www/html
 
-# Install dependencies
-RUN apk add --no-cache \
-    freetype \
-    libpng \
-    libjpeg-turbo \
-    freetype-dev \
-    libpng-dev \
-    libjpeg-turbo-dev
+# Copie du code source de Laravel dans le conteneur
+COPY . /var/www/html/
 
-RUN docker-php-ext-configure gd \
-    --with-freetype \
-    --with-jpeg 
+# Installation des dépendances de composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+RUN composer install --no-interaction --no-scripts --prefer-dist
 
-RUN NPROC=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || 1) && \
-    docker-php-ext-install -j${NPROC} gd 
+# Configuration d'Apache pour Laravel
+# COPY docker/vhost.conf /etc/apache2/sites-available/000-default.conf
+COPY ./vhost.conf /etc/apache2/sites-available/000-default.conf
 
-RUN apk del --no-cache freetype-dev libpng-dev libjpeg-turbo-dev
+# Définition des variables d'environnement pour Laravel
+ENV APP_KEY=base64:Ldt4y4PzFjEocJgD5p5ukSia5LHdJG80j6fzd+pXzjg=
+ENV APP_ENV=local
+ENV APP_DEBUG=true
+ENV APP_URL=http://localhost
 
-RUN docker-php-ext-install pdo pdo_mysql
+# Exposition du port 80 pour l'accès à l'application web
+EXPOSE 80
 
-# install and enable xdebug
-RUN apk add --no-cache $PHPIZE_DEPS \
-	&& pecl install xdebug-2.9.7 \
-	&& docker-php-ext-enable xdebug
+# Commande de démarrage du conteneur
+CMD ["apache2-foreground"]
