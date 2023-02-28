@@ -1,41 +1,43 @@
-FROM php:8.0.8-fpm
 
-# set your user name, ex: user=bernardo
-# ARG user=carlos
-ARG user
-# ARG uid=1000
-ARG uid
+FROM php:8.0.8-fpm-alpine
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
+# Copy File Config
+# ADD C:\xampp\php /usr/local/etc/php-fpm.d/www.conf
+ADD C:\xampp\php\php.ini /usr/local/etc/php-fpm.d/
+
+# ADD and set Group
+RUN addgroup -g 1000 laravel && adduser -G laravel -g laravel -s /bin/sh -D laravel
+
+# Create folder to run
+RUN mkdir -p /var/www/html
+
+# Set Profile
+RUN chown laravel:laravel /var/www/html
+
+# Work in the specific space
+WORKDIR /var/www/html
+
+# Install dependencies
+RUN apk add --no-cache \
+    freetype \
+    libpng \
+    libjpeg-turbo \
+    freetype-dev \
     libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    unzip
+    libjpeg-turbo-dev
 
-# Clear cache
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN docker-php-ext-configure gd \
+    --with-freetype \
+    --with-jpeg 
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd sockets
+RUN NPROC=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || 1) && \
+    docker-php-ext-install -j${NPROC} gd 
 
-# Get latest Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+RUN apk del --no-cache freetype-dev libpng-dev libjpeg-turbo-dev
 
-# Create system user to run Composer and Artisan Commands
-RUN useradd -G www-data,root -u $uid -d /home/$user $user
-RUN mkdir -p /home/$user/.composer && \
-    chown -R $user:$user /home/$user
+RUN docker-php-ext-install pdo pdo_mysql
 
-# Install redis
-RUN pecl install -o -f redis \
-    &&  rm -rf /tmp/pear \
-    &&  docker-php-ext-enable redis
-
-# Set working directory
-WORKDIR /var/www
-
-USER $user
+# install and enable xdebug
+RUN apk add --no-cache $PHPIZE_DEPS \
+	&& pecl install xdebug-2.9.7 \
+	&& docker-php-ext-enable xdebug
